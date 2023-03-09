@@ -1,5 +1,5 @@
 from datetime import datetime
-from os import mkdir
+from os import mkdir, path
 
 from selenium.webdriver.common.by import By
 import undetected_chromedriver as uc
@@ -59,6 +59,8 @@ def link_generator(sites_list):
 
 
 def vedeo_downloadeer(links):
+    if not path.exists('../../Downloaded_videos/'):
+        mkdir(f'../../Downloaded_videos/')
     name = datetime.now().strftime("%d-%m-%Y - %H.%M.%S")
     mkdir(f'../../Downloaded_videos/{name}')
     for vid_name, link in links.items():
