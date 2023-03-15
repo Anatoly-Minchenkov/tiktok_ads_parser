@@ -1,12 +1,13 @@
 import time
 from datetime import datetime
-from os import mkdir, path
+from os import mkdir, path, devnull
 
-from selenium.webdriver.common.by import By
-import undetected_chromedriver as uc
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from requests import get
+import aiofiles as aiofiles
+import asyncio
+import aiohttp
+from arsenic import get_session
+from arsenic.browsers import Chrome
+from arsenic.services import Chromedriver
 
 
 def sites_getter():
@@ -42,15 +43,15 @@ def sites_getter():
     return sites_list
 
 
-def link_generator(sites_list):
+async def link_generator(sites_list):
     links = {}
-    with uc.Chrome(version_main=110, headless=True) as browser:
+    browser = Chrome(**{"goog:chromeOptions": {'args': ['--headless', '--disable-gpu']}})
+    async with get_session(Chromedriver(log_file=devnull), browser) as session:
         for i, site in enumerate(sites_list, start=1):
             try:
-                browser.get(site)
-                video = WebDriverWait(browser, 5, poll_frequency=0.5).until(
-                    EC.presence_of_element_located((By.TAG_NAME, 'video')))
-                links[i] = video.get_attribute("src")
+                await session.get(site)
+                video = await session.wait_for_element(5, "[mediatype = 'video']")
+                links[i] = await video.get_attribute("src")
                 print(f'Видео {i} - добавлено')
             except:
                 print(f'ОШИБКА. Видео по ссылке {i} не добавлено')
@@ -59,27 +60,32 @@ def link_generator(sites_list):
         return links
 
 
-def vedeo_downloadeer(links):
+async def download_video(name, vid_name, link, session):
+    try:
+        async with aiofiles.open(f'../../Downloaded_videos/{name}/{vid_name}.mp4', 'wb') as file:
+            async with session.get(link) as response:
+                async for piece in response.content.iter_chunked(2000):
+                    await file.write(piece)
+            print(f'Файл {vid_name}.mp4 - скачан')
+    except:
+        print(f'ОШИБКА! Не удалось скачать {vid_name}.mp4')
+
+
+async def video_downloader(links):
     if not path.exists('../../Downloaded_videos/'):
         mkdir(f'../../Downloaded_videos/')
     name = datetime.now().strftime("%d-%m-%Y - %H.%M.%S")
     mkdir(f'../../Downloaded_videos/{name}')
-    for vid_name, link in links.items():
-        try:
-            response = get(link, stream=True)
-            response.encoding = 'utf-8'
-            with open(f'../../Downloaded_videos/{name}/{vid_name}.mp4', 'wb') as file:
-                file.write(response.content)
-                print(f'Файл {vid_name}.mp4 - скачан')
-        except:
-            print(f'ОШИБКА! Файл {vid_name}.mp4 не удалось загрузить ')
-            continue
-
-    print('\nГотово! Можете закрывать программу')
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for vid_name, link in links.items():
+            task = asyncio.create_task(download_video(name, vid_name, link, session))
+            tasks.append(task)
+        await asyncio.gather(*tasks)
 
 
 sites = sites_getter()
 start = time.perf_counter()
-links = link_generator(sites)
-vedeo_downloadeer(links)
+links = asyncio.run(link_generator(sites))
+asyncio.run(video_downloader(links))
 print(f'Готово! Время выполнения: {round(time.perf_counter() - start, 3)} сек')
