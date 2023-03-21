@@ -65,15 +65,16 @@ def vedeo_downloadeer(links):
     name = datetime.now().strftime("%d-%m-%Y - %H.%M.%S")
     mkdir(f'../../Downloaded_videos/{name}')
     for vid_name, link in links.items():
-        try:
-            response = get(link, stream=True)
-            response.encoding = 'utf-8'
-            with open(f'../../Downloaded_videos/{name}/{vid_name}.mp4', 'wb') as file:
-                file.write(response.content)
-                print(f'Файл {vid_name}.mp4 - скачан')
-        except:
-            print(f'ОШИБКА! Файл {vid_name}.mp4 не удалось загрузить ')
-            continue
+        response = get(link, stream=True)
+        response.encoding = 'utf-8'
+        if response.status_code == 200:
+            file_path = f'../../Downloaded_videos/{name}/{vid_name}.mp4'
+            with open(file_path, 'wb') as file:
+                for chunk in response.iter_content(1024):
+                    file.write(chunk)
+            print(f'Файл {vid_name}.mp4 - скачан')
+        else:
+            print(f'ОШИБКА! Файл {vid_name}.mp4 не удалось загрузить')
 
     print('\nГотово! Можете закрывать программу')
 
